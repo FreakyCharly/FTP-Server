@@ -2,6 +2,8 @@
 
 import socket, threading
 
+from client_supporter import ClientSupporter
+
 class FTPServer(threading.Thread):
     DEFAULT_CONTROL_PORT = 21
     LISTEN_QUEUE = 5
@@ -14,6 +16,7 @@ class FTPServer(threading.Thread):
     def run(self):
         self.socket.listen(FTPServer.LISTEN_QUEUE)
         while True:
+            ClientSupporter.start()
             """
             Create child thread to handle client.
             Make the thread a daemon.
@@ -22,3 +25,8 @@ class FTPServer(threading.Thread):
     
     def stop(self):
         self.socket.close()
+
+if __name__ == '__main__':
+    server = FTPServer()
+    server.start()
+    server.stop()

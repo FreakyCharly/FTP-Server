@@ -45,7 +45,10 @@ cmds_available = {
     'QUIT': True,
     'CDUP': True,
     'ACCT': True,
-    'NOOP': True
+    'NOOP': True,
+    'PORT': True,
+    'LIST': True
+
 }
 
 
