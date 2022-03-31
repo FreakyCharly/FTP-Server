@@ -40,15 +40,18 @@ import threading, os, socket, time
 cmds_available = {
     'USER': True,
     'PASS': True,
-    'CWD': True,
     'REIN': True,
     'QUIT': True,
     'CDUP': True,
     'ACCT': True,
     'NOOP': True,
+    'SYST': True,
     'PORT': True,
-    'LIST': True
-
+    'LIST': True,
+    'CWD': True
+}
+cmds_3_chars_0_args = {
+    'PWD': True
 }
 
 
@@ -63,7 +66,8 @@ class ClientSupporter(threading.Thread):
         --> ClientSupporter will end when QUIT command is received.
     """
     CLIENT_MAX_SIZE_MSG = 256  # Buffer for client messages
-    DEFAULT_DATA_PORT = 20
+    DEFAULT_DATA_PORT = 8888 #20
+    NAV_FOLDER = '/nav'
     
 
     def __init__(self, client_connection, client_address):
@@ -72,10 +76,10 @@ class ClientSupporter(threading.Thread):
         self.data_addr = client_address[0]
         self.data_port = self.DEFAULT_DATA_PORT
 
-        self.parse = lambda a: a + '\r\n'
+        self.parse = lambda a: f'{a}\r\n'.encode('ascii')
 
         self.user = None
-        self.root_dir = os.path.abspath('.')
+        self.root_dir = os.getcwd() + self.NAV_FOLDER
         self.curr_dir = self.root_dir
 
         threading.Thread.__init__(self)
@@ -86,32 +90,38 @@ class ClientSupporter(threading.Thread):
 
         conn.send(parse('220 Carlos FTP Server (Version 0.5) ready'))
         while True:
-            req = conn.recv(self.CLIENT_MAX_SIZE_MSG)
+            req = conn.recv(self.CLIENT_MAX_SIZE_MSG).decode('ascii')[:-2]
             if req:
                 try:
                     # Get method callback
+                    if len(req) == 3 and ''.join(req) not in cmds_3_chars_0_args:
+                        conn.send(parse('502 Method not implemented'))
+                        break
+                    
                     f = ''.join(req[:4])
+                    if f[-1] == ' ':
+                        f = f[:3]
                     
                     # If not recognised, respond and exit
                     if f not in cmds_available:
                         conn.send(parse('502 Method not implemented'))
                         break
-                    
+
                     # Get callback as function
                     func = getattr(self, f.upper())
 
                     # Get params
                     txt = ''
-                    if len(req) > 4:
+                    if len(f) == 4 and len(req) > 4:
                         txt = req[5:]
+                    elif len(f) == 3 and len(req) > 3:
+                        txt = req[4:]
 
                     # Call function with its params
-                    if len(txt) > 0:
-                        func(txt)
-                    else:
-                        func()
+                    func(txt)
                 
-                except:
+                except Exception as e:
+                    print(e)
                     # Function is recognised but couldn't be called properly
                     conn.send(parse('501 Parameter syntax error'))
             
@@ -139,25 +149,43 @@ class ClientSupporter(threading.Thread):
         self.user = msg
         self.cli_conn.send(self.parse('331 Password needed.'))
     
-    def PASS(self, msg):
+    def PASS(self, _):
         """
         User password.
         Needed after USER.
         """
-        self.cli_conn.send(self.parse(f'230 {self.user} connected.'))
+        self.cli_conn.send(self.parse('230 User connected, please continue.'))
     
-    def QUIT(self):
+    def QUIT(self, _):
         """
         Quit user, hence thread dies.
         """
-        self.cli_conn.send(self.parse(f'221 Bye, {self.user}.'))
+        self.cli_conn.send(self.parse(f'221 Bye.'))
     
-    def NOOP(self):
+    def NOOP(self, _):
         """
         No operation.
         """
         self.cli_conn.send(self.parse('220 OK.'))
     
+    def SYST(self, _):
+        """
+        Give information about the server.
+        """
+        self.cli_conn.send(self.parse('215 CarlosFTPServer system type.'))
+
+    def CWD(self, msg):
+        #@TODO Hay que restringir la movilidad para evitar ataques
+        os.chdir(self.curr_dir)
+        if msg == '/':
+            msg=self.root_dir
+        elif msg[0] == '/':
+            msg=self.root_dir + msg
+        os.chdir(msg)
+
+        self.curr_dir = os.getcwd()
+        self.cli_conn.send(self.parse('250 OK.'))
+
     def PORT(self, msg):
         """
         Set a PORT and a IP to create future Data channels.
@@ -171,7 +199,7 @@ class ClientSupporter(threading.Thread):
         
         self.cli_conn.send(self.parse('200 PORT succesful.'))
 
-    def LIST(self):
+    def LIST(self, _):
         """
         Returns same format as 'ls -l' from UNIX systems.
         """
@@ -186,6 +214,7 @@ class ClientSupporter(threading.Thread):
         # Make up a 'ls -l' format type
         os.chdir(self.curr_dir)
         listed = os.listdir('.')
+
         item_parsed = ''
         base_mode = 'rwx'*3
         for item in listed:
@@ -193,7 +222,7 @@ class ClientSupporter(threading.Thread):
             final_mode = ''
 
             # Guess the 'r', 'w', 'x', '-' mode
-            for i in len(base_mode):
+            for i in range(1, len(base_mode)):
                 final_mode += ((s.st_mode >> (8-i)) & 1) and base_mode[i] or '-'
             
             # Type of file ('d' -> Directory, '-' -> Any other)
@@ -206,3 +235,6 @@ class ClientSupporter(threading.Thread):
             item_parsed = dir + final_mode + ' 1 user group ' + str(s.st_size) + t + os.path.basename(item)
             # TODO '1 user group' must be obtained from os
             self.data_conn.send(self.parse(item_parsed))
+        
+        self.data_conn.close()
+        self.cli_conn.send(self.parse('226 Closing data connection.'))
