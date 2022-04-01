@@ -5,6 +5,7 @@ import socket, threading
 from client_supporter import ClientSupporter
 
 class FTPServer(threading.Thread):
+    MY_IP = '127.0.0.1'
     DEFAULT_CONTROL_PORT = 8887 #21
     LISTEN_QUEUE = 5
 
@@ -32,7 +33,7 @@ class FTPServer(threading.Thread):
 
         # Salir del accept()
         sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        sock.connect(('127.0.0.1', 8887))
+        sock.connect((self.MY_IP, self.DEFAULT_CONTROL_PORT))
         sock.close()
 
 if __name__ == '__main__':

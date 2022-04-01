@@ -38,6 +38,7 @@ import threading, os, socket, time
 
 
 cmds_available = {
+    'OPTS': True,
     'USER': True,
     'PASS': True,
     'REIN': True,
@@ -48,6 +49,7 @@ cmds_available = {
     'SYST': True,
     'PORT': True,
     'LIST': True,
+    'NLST': True,
     'CWD': True
 }
 cmds_3_chars_0_args = {
@@ -68,6 +70,7 @@ class ClientSupporter(threading.Thread):
     CLIENT_MAX_SIZE_MSG = 256  # Buffer for client messages
     DEFAULT_DATA_PORT = 8888 #20
     NAV_FOLDER = '/nav'
+    NAV_FOLDER_AS_REL_PATH = 'nav/'
     
 
     def __init__(self, client_connection, client_address):
@@ -76,11 +79,14 @@ class ClientSupporter(threading.Thread):
         self.data_addr = client_address[0]
         self.data_port = self.DEFAULT_DATA_PORT
 
-        self.parse = lambda a: f'{a}\r\n'.encode('ascii')
+        self.encoding = 'ascii'
+        self.parse = lambda a: f'{a}\r\n'.encode(self.encoding)
 
         self.user = None
         self.root_dir = os.getcwd() + self.NAV_FOLDER
         self.curr_dir = self.root_dir
+        self.depth_dir = 0
+        os.chdir(self.root_dir)
 
         threading.Thread.__init__(self)
     
@@ -88,9 +94,12 @@ class ClientSupporter(threading.Thread):
         conn = self.cli_conn
         parse = self.parse
 
+
+        print("Cliente conectado")
         conn.send(parse('220 Carlos FTP Server (Version 0.5) ready'))
         while True:
-            req = conn.recv(self.CLIENT_MAX_SIZE_MSG).decode('ascii')[:-2]
+            req = conn.recv(self.CLIENT_MAX_SIZE_MSG).decode(self.encoding)[:-2]
+            print(f'Recibido: _{req}_')
             if req:
                 try:
                     # Get method callback
@@ -142,6 +151,17 @@ class ClientSupporter(threading.Thread):
       --> Transfer callbacks
             - 
     """
+    def OPTS(self, msg):
+        args = msg.split(" ")
+        if len(args) == 2:
+            if args[1] == 'ON':
+                if args[0] == 'UTF8':
+                    self.encoding = 'utf-8'
+                    self.cli_conn.send(self.parse('200 Mode turned to UTF8.'))
+                    return
+        
+        self.cli_conn.send(self.parse('504 Not implemented for those parameters.'))
+    
     def USER(self, msg):
         """
         User log-in.
@@ -175,13 +195,40 @@ class ClientSupporter(threading.Thread):
         self.cli_conn.send(self.parse('215 CarlosFTPServer system type.'))
 
     def CWD(self, msg):
-        #@TODO Hay que restringir la movilidad para evitar ataques
-        os.chdir(self.curr_dir)
+        # Get depth aimed by client
+        path = msg.split('/')
+        depth_aimed = 0
+        for item in path:
+            if item == '..': 
+                depth_aimed -= 1
+            elif item != '':        # Avoid '/' character ('' by split)
+                depth_aimed += 1
+
+        # Get current depth
+        curr = self.curr_dir.split('/')
+        root = self.root_dir.split('/')
+        act_depth = len(curr) - len(root)
+
+        """
+        If total_depth is negative or depth_aimed is negative and the query starts with /<path_remaining>,
+        then reject the query from client.
+        """
+        tot_depth = act_depth + depth_aimed
+        if  (tot_depth < 0) or \
+            (path[0] == '' and depth_aimed < 0):
+            self.cli_conn.send(self.parse('450 Not available, access forbidden.'))
+            return
+
         if msg == '/':
             msg=self.root_dir
         elif msg[0] == '/':
             msg=self.root_dir + msg
-        os.chdir(msg)
+        
+        try:
+            os.chdir(msg)
+        except OSError:
+            self.cli_conn.send(self.parse('501 Incorrect path.'))
+            return
 
         self.curr_dir = os.getcwd()
         self.cli_conn.send(self.parse('250 OK.'))
@@ -202,9 +249,12 @@ class ClientSupporter(threading.Thread):
     def LIST(self, _):
         """
         Returns same format as 'ls -l' from UNIX systems.
+        @TODO Poder hacer ls sobre un directorio o archivo dado
         """
+        s = self._get_actual_rel_path()
+
         # Open data connection
-        self.cli_conn.send(self.parse(f'150 Opening ASCII mode data connection for {self.curr_dir}.'))
+        self.cli_conn.send(self.parse(f'150 Opening ASCII mode data connection for {s}.'))
         self.data_conn=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
@@ -238,3 +288,40 @@ class ClientSupporter(threading.Thread):
         
         self.data_conn.close()
         self.cli_conn.send(self.parse('226 Closing data connection.'))
+    
+    def NLST(self, _):
+        """
+        Returns file and directory names.
+        @TODO Poder hacer ls sobre un directorio o archivo dado
+        """
+        s = self._get_actual_rel_path()
+        # Open data connection
+        self.cli_conn.send(self.parse(f'150 Opening ASCII mode data connection for {s}.'))
+        self.data_conn=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        try:
+            self.data_conn.connect((self.data_addr,self.data_port))
+        except:
+            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+
+        # Make up a 'ls -l' format type
+        os.chdir(self.curr_dir)
+        listed = os.listdir('.')
+
+        for item in listed:
+            self.data_conn.send(self.parse(item))
+        
+        self.data_conn.close()
+        self.cli_conn.send(self.parse('226 Closing data connection.'))
+    
+    def _get_actual_rel_path(self):
+        """
+        Get depth + build rel. path from <root>/.
+        """
+        curr = self.curr_dir.split('/')
+        root = self.root_dir.split('/')
+        j = len(root)
+        s = self.NAV_FOLDER_AS_REL_PATH
+        for i in range(1, len(curr)-j+1):
+            s += curr[j-1+i] + '/'
+        
+        return s
