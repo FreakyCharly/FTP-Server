@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import socket, threading
+import socket, threading, os
 
 from client_supporter import ClientSupporter
 
@@ -13,6 +13,7 @@ class FTPServer(threading.Thread):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('', FTPServer.DEFAULT_CONTROL_PORT))
         self._running = True
+        self._server_dir = os.getcwd()
         threading.Thread.__init__(self)
     
     def run(self):
@@ -21,19 +22,20 @@ class FTPServer(threading.Thread):
             try:
                 c_conn, c_addr = self.socket.accept()
                 if self._running:
-                    th = ClientSupporter(c_conn, c_addr)
+                    th = ClientSupporter(c_conn, c_addr, self._server_dir)
                     th.daemon = True
                     th.start()
-            except:
+            except Exception as e:
+                print(e)
                 break
     
     def stop(self):
-        self.socket.close()
         self._running = False
 
         # Salir del accept()
         sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         sock.connect((self.MY_IP, self.DEFAULT_CONTROL_PORT))
+        self.socket.close()
         sock.close()
 
 if __name__ == '__main__':
