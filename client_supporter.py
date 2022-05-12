@@ -108,7 +108,6 @@ class ClientSupporter(threading.Thread):
         self.user = None
         self.root_dir = server_dir + self.NAV_FOLDER
         self.curr_dir = self.root_dir
-        self.depth_dir = 0
         os.chdir(self.root_dir)
 
         self._quit = False
@@ -498,6 +497,11 @@ class ClientSupporter(threading.Thread):
         Returns a tuple (depth_aimed, total_depth) so the function
         calling can decide what to do.
         """
+        # Get current depth
+        curr = self.curr_dir.split('/')
+        root = self.root_dir.split('/')
+        act_depth = len(curr) - len(root)
+        
         # Get depth aimed by client
         depth_aimed = 0
         for item in path_aimed:
@@ -505,11 +509,8 @@ class ClientSupporter(threading.Thread):
                 depth_aimed -= 1
             elif item != '':        # Avoid '/' character ('' by split)
                 depth_aimed += 1
-
-        # Get current depth
-        curr = self.curr_dir.split('/')
-        root = self.root_dir.split('/')
-        act_depth = len(curr) - len(root)
+            if -depth_aimed > act_depth:
+                return -1, -1
 
         tot_depth = act_depth + depth_aimed
         return depth_aimed, tot_depth
