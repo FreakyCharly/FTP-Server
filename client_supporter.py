@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
+Author: Carlos Anivarro Batiste
+
 All procedure with regards to command treatment is done as the FTP-RFC (959) especifies.
 
+For easy callback security, a dictionary will be used so, for example:
+ - cmds_available = {"RETR": True, "CWD": False}
 
-For easy callback translation, a dictionary will be used so, for example:
- - callback_dict = {"CDUP": cdup_callback}
-
-So if client enters 'CDUP' command, server will get its callback function 
-from the dictionary and execute it.
+So if client enters 'RETR' command, server will get its callback function and execute it
+safely. Otherwise, will promt an error telling cmd is not implemented.
 
 
                                         ------------
@@ -37,11 +38,12 @@ https://www.adamsmith.haus/python/answers/how-to-call-a-function-by-its-name-as-
 import threading, os, socket, time
 
 users = {
-    'e': 'e'
+    'eps': 'eps'
 }
 
 cmds_available = {
     'OPTS': True,
+    'TYPE': True,
     'USER': True,
     'PASS': True,
     'REIN': True,
@@ -56,6 +58,11 @@ cmds_available = {
     'RETR': True,
     'STOR': True,
     'APPE': True,
+    'DELE': True,
+    'RNFR': True,
+    'RNTO': True,
+    'RMD': True,
+    'MKD': True,
     'CWD': True,
     'PWD': False
 }
@@ -63,6 +70,8 @@ cmds_3_chars_0_args = {
     'PWD': True
 }
 
+ASCII = 'ascii'
+UTF8 = 'utf-8'
 
 class ClientSupporter(threading.Thread):
     """
@@ -88,9 +97,13 @@ class ClientSupporter(threading.Thread):
         self.data_addr = client_address[0]
         self.data_port = self.DEFAULT_DATA_PORT
 
-        self.encoding = 'ascii'
-        self.parse = lambda a: f'{a}\r\n'.encode(self.encoding)
+        self.encoding = ASCII
+        self.binary = False
+        self.parse_code = lambda a: f'{a}\r\n'.encode(self.encoding)
+        self.parse_item = lambda a: f'{a}\r\n'.encode(self.encoding)    # For LST and NLST
+        self.decode = lambda a: a.decode(self.encoding)
 
+        self.file_to_rename = None
         self.user = None
         self.root_dir = server_dir + self.NAV_FOLDER
         self.curr_dir = self.root_dir
@@ -102,13 +115,13 @@ class ClientSupporter(threading.Thread):
     
     def run(self):
         conn = self.cli_conn
-        parse = self.parse
+        parse = self.parse_code
 
 
         print(f"[{threading.get_ident()}] Cliente conectado")
         conn.send(parse('220 Carlos FTP Server (Version 0.5) ready'))
         while self._quit is False:
-            req = conn.recv(self.CLIENT_MAX_SIZE_MSG).decode(self.encoding)[:-2]
+            req = self.decode(conn.recv(self.CLIENT_MAX_SIZE_MSG))[:-2]
             print(f"[{threading.get_ident()}] Recibido: _{req}_")
             if req:
                 try:
@@ -156,111 +169,113 @@ class ClientSupporter(threading.Thread):
                 break
         print(f"[{threading.get_ident()}] Cliente desconectado")
     
-    """
-    To be implemented (callbacks):
-      --> Access control callbacks
-           - ACCT (Optional) -> To move amongst users within a USER itself
-    """
     def OPTS(self, msg):
         args = msg.split(" ")
         if len(args) == 2:
             if args[1] == 'ON':
                 if args[0] == 'UTF8':
-                    self.encoding = 'utf-8'
-                    self.cli_conn.send(self.parse('200 Mode turned to UTF8.'))
+                    self.encoding = UTF8
+                    self.binary = False
+                    self.cli_conn.send(self.parse_code('200 Mode turned to UTF8.'))
                     return
         
-        self.cli_conn.send(self.parse('504 Not implemented for those parameters.'))
+        self.cli_conn.send(self.parse_code('504 Not implemented for those parameters.'))
     
     def USER(self, msg):
         """
         User log-in.
         """
         if msg not in users:
-            self.cli_conn.send(self.parse('530 User doesn\'t exist.'))
+            self.cli_conn.send(self.parse_code('530 User doesn\'t exist.'))
             return
 
         self.user = msg
-        self.cli_conn.send(self.parse('331 Password needed.'))
+        self.cli_conn.send(self.parse_code('331 Password needed.'))
     
     def PASS(self, msg):
         """
         User password.
         Needed after USER.
         """
-        if self.user is not None:
-            if self.user in users:
-                if users[self.user] == msg:
-                    self.cli_conn.send(self.parse('230 User connected, please continue.'))
-                    return
-        self.cli_conn.send(self.parse('530 User not connected.'))
+        if self.user is None:       # USER cmd not used
+            self.cli_conn.send(self.parse_code('503 Incorrect sequence.'))
+            return
+        if self.user not in users:  # USER not accepted
+            self.cli_conn.send(self.parse_code('530 User not connected.'))
+            return
+        if users[self.user] != msg: # Wrong password
+            self.cli_conn.send(self.parse_code('530 Wrong password.'))
+            return
+            
+        self.cli_conn.send(self.parse_code('230 User connected, please continue.'))
     
     def REIN(self, msg):
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
             return
 
         self.data_port = self.DEFAULT_DATA_PORT
         self.curr_dir = self.root_dir
         os.chdir(self.root_dir)
-        self.encoding = 'ascii'
+        self.encoding = ASCII
+        self.binary = False
         self.user = None
-        self.cli_conn.send(self.parse(f'220 Service prepared for new user.'))
+        self.cli_conn.send(self.parse_code(f'220 Service prepared for new user.'))
 
     def QUIT(self, msg):
         """
         Quit user, hence thread dies.
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
             return
         
         self._quit = True
-        self.cli_conn.send(self.parse(f'221 Bye.'))
+        self.cli_conn.send(self.parse_code(f'221 Bye.'))
     
     def NOOP(self, msg):
         """
         No operation.
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
             return
 
-        self.cli_conn.send(self.parse('220 OK.'))
+        self.cli_conn.send(self.parse_code('220 OK.'))
     
     def SYST(self, msg):
         """
         Give information about the server.
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
             return
 
-        self.cli_conn.send(self.parse('215 CarlosFTPServer system type.'))
+        self.cli_conn.send(self.parse_code('215 CarlosFTPServer system type.'))
 
     def CDUP(self, msg):
         """
         Change to parent directory.
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
             return
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         depth_aimed, tot_depth = self._get_depth(['..'])
         if tot_depth < 0:
-            self.cli_conn.send(self.parse('450 Not available, access forbidden.'))
+            self.cli_conn.send(self.parse_code('450 Not available, access forbidden.'))
             return
 
         os.chdir('..')
         self.curr_dir = os.getcwd()
-        self.cli_conn.send(self.parse('200 OK.'))
+        self.cli_conn.send(self.parse_code('200 OK.'))
 
     def CWD(self, msg):
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         # Get depth aimed by client
@@ -273,7 +288,7 @@ class ClientSupporter(threading.Thread):
         """
         if  (tot_depth < 0) or \
             (path[0] == '' and depth_aimed < 0):
-            self.cli_conn.send(self.parse('450 Not available, access forbidden.'))
+            self.cli_conn.send(self.parse_code('450 Not available, access forbidden.'))
             return
 
         if msg == '/':
@@ -284,18 +299,18 @@ class ClientSupporter(threading.Thread):
         try:
             os.chdir(msg)
         except OSError:
-            self.cli_conn.send(self.parse('501 Incorrect path.'))
+            self.cli_conn.send(self.parse_code('501 Incorrect path.'))
             return
 
         self.curr_dir = os.getcwd()
-        self.cli_conn.send(self.parse('250 OK.'))
+        self.cli_conn.send(self.parse_code('250 OK.'))
 
     def PORT(self, msg):
         """
         Set a PORT and a IP to create future Data channels.
         """
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         data = msg.split(',')
@@ -303,9 +318,9 @@ class ClientSupporter(threading.Thread):
             self.data_addr = '.'.join(data[:4])                 # Get IP
             self.data_port = (int(data[4]) << 8) + int(data[5]) # Get port
         except:
-            self.cli_conn.send(self.parse('501 Parameter syntax error'))
+            self.cli_conn.send(self.parse_code('501 Parameter syntax error'))
         
-        self.cli_conn.send(self.parse('200 PORT succesful.'))
+        self.cli_conn.send(self.parse_code('200 PORT succesful.'))
 
     def LIST(self, msg):
         """
@@ -313,19 +328,19 @@ class ClientSupporter(threading.Thread):
         @TODO Poder hacer ls sobre un directorio o archivo dado
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         # Open data connection
         s = self._get_actual_rel_path()
-        self.cli_conn.send(self.parse(f'150 Opening ASCII mode data connection for {s}.'))
+        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection for {s}.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
-            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+            self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
         
         # Make up a 'ls -l' format type
@@ -350,10 +365,10 @@ class ClientSupporter(threading.Thread):
             # Parse full item
             item_parsed = dir + final_mode + ' 1 user group ' + str(s.st_size) + t + os.path.basename(item)
             # TODO '1 user group' must be obtained from os
-            self.data_conn.send(self.parse(item_parsed))
+            self.data_conn.send(self.parse_item(item_parsed))
         
         self.data_conn.close()
-        self.cli_conn.send(self.parse('226 Closing data connection.'))
+        self.cli_conn.send(self.parse_code('226 Closing data connection.'))
     
     def NLST(self, msg):
         """
@@ -361,29 +376,29 @@ class ClientSupporter(threading.Thread):
         @TODO Poder hacer ls sobre un directorio o archivo dado
         """
         if msg:
-            self.cli_conn(self.parse('502 Syntax error.'))
+            self.cli_conn(self.parse_code('502 Syntax error.'))
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         # Open data connection
         s = self._get_actual_rel_path()
-        self.cli_conn.send(self.parse(f'150 Opening ASCII mode data connection for {s}.'))
+        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection for {s}.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
-            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+            self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
 
         # Make up a 'ls -l' format type
         listed = os.listdir('.')
 
         for item in listed:
-            self.data_conn.send(self.parse(item))
+            self.data_conn.send(self.parse_item(item))
         
         self.data_conn.close()
-        self.cli_conn.send(self.parse('226 Closing data connection.'))
+        self.cli_conn.send(self.parse_code('226 Closing data connection.'))
     
     def _get_actual_rel_path(self):
         """
@@ -419,50 +434,80 @@ class ClientSupporter(threading.Thread):
         tot_depth = act_depth + depth_aimed
         return depth_aimed, tot_depth
     
+    def TYPE(self, msg):
+        """
+        Change file format tranfer.
+        """
+        if msg.lower() == 'i':      # Binary
+            self.binary = True
+            self.cli_conn.send(self.parse_code('200 Binary mode enabled.'))
+            return
+        elif msg.lower() == 'a':    # ASCII
+            self.encoding = ASCII
+            self.binary = False
+            self.cli_conn.send(self.parse_code('200 ASCII mode enabled.'))
+            return
+
+        self.cli_conn.send(self.parse_code('504 Not implemented for that format.'))
+
     def RETR(self, msg):
         """
         Send file content to client.
         """
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
         
         # Verify path exists
         if not os.path.exists(msg):
-            self.cli_conn.send(self.parse('501 File not found.'))
+            self.cli_conn.send(self.parse_code('501 File not found.'))
             return
 
         # Verify user is retrieving a file
         if os.path.isdir(msg):
-            self.cli_conn.send(self.parse('450 Not a file.'))
+            self.cli_conn.send(self.parse_code('450 Not a file.'))
             return
 
         # Open data connection
-        self.cli_conn.send(self.parse('150 Opening data connection.'))
+        self.cli_conn.send(self.parse_code('150 Opening data connection.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
-            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+            self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
 
         # Send data
-        with open(msg, 'r') as f:
-            data = f.read(self.READ_SIZE)
-            while data:
-                self.data_conn.send(data)
-                data = f.read(self.READ_SIZE)
+        try:
+            if self.binary is False:
+                with open(msg, 'r') as f:
+                    data = f.read(self.READ_SIZE)
+                    while data:
+                        self.data_conn.send(data.encode(self.encoding))
+                        data = f.read(self.READ_SIZE)
+            else:
+                with open(msg, 'rb') as f:
+                    data = f.read(self.READ_SIZE)
+                    while data:
+                        self.data_conn.send(data)
+                        data = f.read(self.READ_SIZE)
+        except:
+            self.data_conn.close()
+            bin = 'disabled' if self.binary is False else 'enabled'
+            desc = f'450 Binary mode is {bin}. Cannot send requested file.'
+            self.cli_conn.send(self.parse_code(desc))
+            return
         
         # Close data connection
         self.data_conn.close()
-        self.cli_conn.send(self.parse('250 File transferred succesfully.'))
+        self.cli_conn.send(self.parse_code('250 File transferred succesfully.'))
 
     def STOR(self, msg):
         """
         Create a file or replace its content with new data.
         """
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
         
         # Operate path of the file to append
@@ -470,44 +515,74 @@ class ClientSupporter(threading.Thread):
         path.pop()
 
         # Ensure depth aimed by user is correct
-        depth_aimed, tot_depth = self._get_depth(path)
+        _, tot_depth = self._get_depth(path)
         if tot_depth < 0:
-            self.cli_conn.send(self.parse('450 Not available, access forbidden.'))
+            self.cli_conn.send(self.parse_code('450 Not available, access forbidden.'))
             return
 
         # Verify path exists
         msg_path = '/'.join(path)
         if msg_path != '' and not os.path.exists(msg_path):
-            self.cli_conn.send(self.parse('501 Path incorrect.'))
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
             return
 
         # Open data connection
-        self.cli_conn.send(self.parse('150 Opening data connection.'))
+        self.cli_conn.send(self.parse_code('150 Opening data connection.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
-            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+            self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
         
         # Get file transferred by user
-        with open(msg, 'wb') as f:
-            data = self.data_conn.recv(self.WRITE_SIZE)
-            f.write(data)
-            while data:
-                data = self.data_conn.recv(self.WRITE_SIZE)
-                f.write(data)
+        try:
+            self._store_file(msg)
+        except OSError as e:
+            if e.errno == 21:
+                desc = f'450 Aiming a directory. Cannot store requested file.'
+                self.cli_conn.send(self.parse_code(desc))
+                self.data_conn.close()
+                return
+        except:
+                bin = 'disabled' if self.binary is False else 'enabled'
+                desc = f'450 Binary mode is {bin}. Cannot store requested file.'
+                self.cli_conn.send(self.parse_code(desc))
+                self.data_conn.close()
+                return
 
         # Close data connection
         self.data_conn.close()
-        self.cli_conn.send(self.parse('250 File transferred succesfully.'))
+        self.cli_conn.send(self.parse_code('250 File transferred succesfully.'))
     
+    def _store_file(self, msg):
+        """
+        Private function to store given content.
+        """
+        # Store ASCII/UTF-8/... file (.txt, .php, ...)
+        if self.binary is False:
+            with open(msg, 'w') as f:
+                data = self.decode(self.data_conn.recv(self.WRITE_SIZE))
+                f.write(data)
+                while data:
+                    data = self.decode(self.data_conn.recv(self.WRITE_SIZE))
+                    f.write(data)
+        
+        # Store BINARY file (.jpeg, .mp4, ...)
+        else:
+            with open(msg, 'wb') as f:
+                data = self.data_conn.recv(self.WRITE_SIZE)
+                f.write(data)
+                while data:
+                    data = self.data_conn.recv(self.WRITE_SIZE)
+                    f.write(data)
+
     def APPE(self, msg):
         """
         Append content to an existing or new file.
         """
         if self.user is None:
-            self.cli_conn.send(self.parse('530 Not connected.'))
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
         # Operate path of the file to append
@@ -515,36 +590,210 @@ class ClientSupporter(threading.Thread):
         path.pop()
 
         # Ensure depth aimed by user is correct
-        depth_aimed, tot_depth = self._get_depth(path)
+        _, tot_depth = self._get_depth(path)
         if tot_depth < 0:
-            self.cli_conn.send(self.parse('450 Not available, access forbidden.'))
+            self.cli_conn.send(self.parse_code('450 Not available, access forbidden.'))
             return
 
         # Verify path exists
         msg_path = '/'.join(path)
-        if not os.path.exists(msg_path):
-            self.cli_conn.send(self.parse('501 Path incorrect.'))
+        if msg_path != '' and not os.path.exists(msg_path):
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
             return
 
         # Open data connection
-        self.cli_conn.send(self.parse('150 Opening data connection.'))
+        self.cli_conn.send(self.parse_code('150 Opening data connection.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
-            self.cli_conn.send(self.parse('425 Data conection cannot be opened.'))
+            self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
         
         # Get file transferred by user
-        with open(msg, 'ab') as f:
-            data = self.data_conn.recv(self.WRITE_SIZE)
-            f.write(data)
-            while data:
-                data = self.data_conn.recv(self.WRITE_SIZE)
-                f.write(data)
-
+        try:
+            self._append_file(msg)
+        except OSError as e:
+            if e.errno == 21:
+                desc = f'450 Aiming a directory. Cannot append requested file.'
+                self.cli_conn.send(self.parse_code(desc))
+                self.data_conn.close()
+                return
+        except:
+                bin = 'disabled' if self.binary is False else 'enabled'
+                desc = f'450 Binary mode is {bin}. Cannot append requested file.'
+                self.cli_conn.send(self.parse_code(desc))
+                self.data_conn.close()
+                return
 
         # Close data connection
         self.data_conn.close()
-        self.cli_conn.send(self.parse('250 File transferred succesfully.'))
+        self.cli_conn.send(self.parse_code('250 File transferred succesfully.'))
+    
+    def _append_file(self, msg):
+        """
+        Private function to store given content.
+        """
+        # Append to ASCII/UTF-8/... file (.txt, .php, ...)
+        if self.binary is False:
+            with open(msg, 'a') as f:
+                data = self.decode(self.data_conn.recv(self.WRITE_SIZE))
+                f.write(data)
+                while data:
+                    data = self.decode(self.data_conn.recv(self.WRITE_SIZE))
+                    f.write(data)
+        
+        # Append to BINARY file (.jpeg, .mp4, ...)
+        else:
+            with open(msg, 'ab') as f:
+                data = self.data_conn.recv(self.WRITE_SIZE)
+                f.write(data)
+                while data:
+                    data = self.data_conn.recv(self.WRITE_SIZE)
+                    f.write(data)
 
+    def RNFR(self, msg):
+        """
+        Get and prepare the file to rename.
+        """
+        # Check user is logged
+        if self.user is None:
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
+            return
+        
+        # Operate path of the directory
+        path = msg.split('/')
+        path.pop()
+
+        # Ensure depth aimed by user is correct
+        _, tot_depth = self._get_depth(path)
+        if tot_depth < 0:
+            self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+            return
+
+        # Verify path exists
+        msg_path = '/'.join(path)
+        if msg_path != '' and not os.path.exists(msg_path):
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+            return
+
+        # Verify user is deleting a file
+        if not os.path.isfile(msg):
+            self.cli_conn.send(self.parse_code('450 Not a file.'))
+            return
+
+        self.file_to_rename = msg
+        self.cli_conn.send(self.parse_code('350 File selected.'))
+
+    def RNTO(self, msg):
+        """
+        Rename the file selected.
+        Needed after RNFR.
+        """
+        if self.file_to_rename is None:
+            self.cli_conn.send(self.parse_code('503 Incorrect sequence.'))
+        
+        os.rename(self.file_to_rename, msg)
+        self.file_to_rename = None  # Reset
+
+        self.cli_conn.send(self.parse_code('250 File renamed succesfully.'))
+
+    def DELE(self, msg):
+        """
+        Delete file.
+        """
+        # Check user is logged
+        if self.user is None:
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
+            return
+        
+        # Operate path of the directory
+        path = msg.split('/')
+        path.pop()
+
+        # Ensure depth aimed by user is correct
+        _, tot_depth = self._get_depth(path)
+        if tot_depth < 0:
+            self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+            return
+
+        # Verify path exists
+        msg_path = '/'.join(path)
+        if msg_path != '' and not os.path.exists(msg_path):
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+            return
+
+        # Verify user is deleting a file
+        if not os.path.isfile(msg):
+            self.cli_conn.send(self.parse_code('450 Not a file.'))
+            return
+        
+        # Delete file
+        os.remove(msg)
+
+        self.cli_conn.send(self.parse_code('250 File deleted succesfully.'))
+    
+    def RMD(self, msg):
+        """
+        Delete directory.
+        """
+        # Check user is logged
+        if self.user is None:
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
+            return
+        
+        # Operate path of the directory
+        path = msg.split('/')
+        path.pop()
+
+        # Ensure depth aimed by user is correct
+        _, tot_depth = self._get_depth(path)
+        if tot_depth < 0:
+            self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+            return
+
+        # Verify path exists
+        msg_path = '/'.join(path)
+        if msg_path != '' and not os.path.exists(msg_path):
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+            return
+
+        # Verify user is deleting a directory
+        if not os.path.isdir(msg):
+            self.cli_conn.send(self.parse_code('550 Not a directory.'))
+            return
+        
+        # Delete directory
+        os.rmdir(msg)
+
+        self.cli_conn.send(self.parse_code('250 Directory deleted succesfully.'))
+    
+    def MKD(self, msg):
+        """
+        Create directory.
+        """
+        # Check user is logged
+        if self.user is None:
+            self.cli_conn.send(self.parse_code('530 Not connected.'))
+            return
+        
+        # Operate path of the directory
+        path = msg.split('/')
+        path.pop()
+
+        # Ensure depth aimed by user is correct
+        _, tot_depth = self._get_depth(path)
+        if tot_depth < 0:
+            self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+            return
+
+        # Verify path exists
+        msg_path = '/'.join(path)
+        if msg_path != '' and not os.path.exists(msg_path):
+            self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+            return
+        
+        # Create directory
+        os.mkdir(msg)
+
+        self.cli_conn.send(self.parse_code('250 Directory created succesfully.'))
