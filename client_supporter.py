@@ -42,6 +42,7 @@ users = {
 }
 
 cmds_available = {
+    'HELP': True,
     'OPTS': True,
     'TYPE': True,
     'USER': True,
@@ -64,7 +65,6 @@ cmds_available = {
     'RMD': True,
     'MKD': True,
     'CWD': True,
-    'PWD': False
 }
 cmds_3_chars_0_args = {
     'PWD': True
@@ -99,7 +99,8 @@ class ClientSupporter(threading.Thread):
 
         self.encoding = ASCII
         self.binary = False
-        self.parse_code = lambda a: f'{a}\r\n'.encode(self.encoding)
+        self.parse = lambda a: f'{a}\r\n'.encode(self.encoding)         # For control port data
+        self.parse_code = lambda a: f'{a}\r\n'.encode(self.encoding)    # For response code
         self.parse_item = lambda a: f'{a}\r\n'.encode(self.encoding)    # For LST and NLST
         self.decode = lambda a: a.decode(self.encoding)
 
@@ -169,6 +170,25 @@ class ClientSupporter(threading.Thread):
                 break
         print(f"[{threading.get_ident()}] Cliente desconectado")
     
+    def HELP(self, msg):
+        # Just accept the generic HELP cmd
+        if msg:
+            self.cli_conn.send(self.parse_code('501 No parameters accepted.'))
+            return
+
+        # Loop through all cmds available
+        desc = '211 Commands implemented: '
+        for c in cmds_available.keys():
+            if cmds_available[c] is True:
+                desc += c + ', '
+        for c in cmds_3_chars_0_args.keys():
+            if cmds_3_chars_0_args[c] is True:
+                desc += c + ', '
+        
+        desc = desc[:-2] + '.'  # Replace last ', ' substring to '.'
+
+        self.cli_conn.send(self.parse(desc))
+
     def OPTS(self, msg):
         args = msg.split(" ")
         if len(args) == 2:
@@ -325,47 +345,81 @@ class ClientSupporter(threading.Thread):
     def LIST(self, msg):
         """
         Returns same format as 'ls -l' from UNIX systems.
-        @TODO Poder hacer ls sobre un directorio o archivo dado
         """
-        if msg:
-            self.cli_conn(self.parse_code('502 Syntax error.'))
         if self.user is None:
             self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
+
+        # Make up a 'ls -l' format type
+        listed = os.listdir('.')
+        if msg:
+            # Operate path of the directory
+            path = msg.split('/')
+
+            # Ensure depth aimed by user is correct
+            depth_aimed, tot_depth = self._get_depth(path)
+            if  tot_depth < 0 or \
+                (path[0] == '' and depth_aimed < 0):
+                self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+                return
+
+            if msg == '/':
+                msg=self.root_dir
+            elif msg[0] == '/':
+                msg=self.root_dir + msg
+
+            # Verify path exists
+            msg_path = '/'.join(path)
+            if msg_path != '' and not os.path.exists(msg_path):
+                self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+                return
+
+            # Verify user is listing a directory
+            if not os.path.isdir(msg):
+                self.cli_conn.send(self.parse_code('550 Not a directory.'))
+                return
+            
+            # Swap to new directory
+            listed = os.listdir(msg)
+            if msg[-1] != '/': msg += '/'
+
         # Open data connection
-        s = self._get_actual_rel_path()
-        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection for {s}.'))
+        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
             self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
-        
-        # Make up a 'ls -l' format type
-        listed = os.listdir('.')
 
         item_parsed = ''
         base_mode = 'rwx'*3
-        for item in listed:
-            s = os.stat(item)
-            final_mode = ''
+        try:
+            for item in listed:
+                s = os.stat(msg+item)
+                final_mode = ''
 
-            # Guess the 'r', 'w', 'x', '-' mode
-            for i in range(1, len(base_mode)):
-                final_mode += ((s.st_mode >> (8-i)) & 1) and base_mode[i] or '-'
-            
-            # Type of file ('d' -> Directory, '-' -> Any other)
-            dir = 'd' if os.path.isdir(item) else '-'
-            
-            # Date
-            t = time.strftime(' %b %d %H:%M ', time.gmtime(s.st_mtime))
-            
-            # Parse full item
-            item_parsed = dir + final_mode + ' 1 user group ' + str(s.st_size) + t + os.path.basename(item)
-            # TODO '1 user group' must be obtained from os
-            self.data_conn.send(self.parse_item(item_parsed))
+                # Guess the 'r', 'w', 'x', '-' mode
+                for i in range(1, len(base_mode)):
+                    final_mode += ((s.st_mode >> (8-i)) & 1) and base_mode[i] or '-'
+                
+                # Type of file ('d' -> Directory, '-' -> Any other)
+                dir = 'd' if os.path.isdir(item) else '-'
+                
+                # Date
+                t = time.strftime(' %b %d %H:%M ', time.gmtime(s.st_mtime))
+                
+                # Parse full item
+                item_parsed = dir + final_mode + ' 1 user group ' + str(s.st_size) + t + os.path.basename(item)
+                # TODO '1 user group' must be obtained from os
+                self.data_conn.send(self.parse_item(item_parsed))
+        except Exception as e:
+            print(e)
+            self.data_conn.close()
+            self.cli_conn.send(self.parse_code('451 Interrupted. Local error.'))
+            return
+
         
         self.data_conn.close()
         self.cli_conn.send(self.parse_code('226 Closing data connection.'))
@@ -373,26 +427,52 @@ class ClientSupporter(threading.Thread):
     def NLST(self, msg):
         """
         Returns file and directory names.
-        @TODO Poder hacer ls sobre un directorio o archivo dado
         """
-        if msg:
-            self.cli_conn(self.parse_code('502 Syntax error.'))
         if self.user is None:
             self.cli_conn.send(self.parse_code('530 Not connected.'))
             return
 
+        # Make up a 'ls -l' format type
+        listed = os.listdir('.')
+        if msg:
+            # Operate path of the directory
+            path = msg.split('/')
+
+            # Ensure depth aimed by user is correct
+            depth_aimed, tot_depth = self._get_depth(path)
+            if  tot_depth < 0 or \
+                (path[0] == '' and depth_aimed < 0):
+                self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
+                return
+
+            if msg == '/':
+                msg=self.root_dir
+            elif msg[0] == '/':
+                msg=self.root_dir + msg
+
+            # Verify path exists
+            msg_path = '/'.join(path)
+            if msg_path != '' and not os.path.exists(msg_path):
+                self.cli_conn.send(self.parse_code('501 Path incorrect.'))
+                return
+
+            # Verify user is listing a directory
+            if not os.path.isdir(msg):
+                self.cli_conn.send(self.parse_code('550 Not a directory.'))
+                return
+            
+            # Swap to new directory
+            listed = os.listdir(msg)
+            if msg[-1] != '/': msg += '/'
+
         # Open data connection
-        s = self._get_actual_rel_path()
-        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection for {s}.'))
+        self.cli_conn.send(self.parse_code(f'150 Opening ASCII mode data connection.'))
         self.data_conn = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
             self.data_conn.connect((self.data_addr,self.data_port))
         except:
             self.cli_conn.send(self.parse_code('425 Data conection cannot be opened.'))
             return
-
-        # Make up a 'ls -l' format type
-        listed = os.listdir('.')
 
         for item in listed:
             self.data_conn.send(self.parse_item(item))
@@ -667,9 +747,14 @@ class ClientSupporter(threading.Thread):
 
         # Ensure depth aimed by user is correct
         _, tot_depth = self._get_depth(path)
-        if tot_depth < 0:
+        if  tot_depth < 0:
             self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
             return
+
+        if msg == '/':
+            msg=self.root_dir
+        elif msg[0] == '/':
+            msg=self.root_dir + msg
 
         # Verify path exists
         msg_path = '/'.join(path)
@@ -713,9 +798,14 @@ class ClientSupporter(threading.Thread):
 
         # Ensure depth aimed by user is correct
         _, tot_depth = self._get_depth(path)
-        if tot_depth < 0:
+        if  tot_depth < 0:
             self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
             return
+
+        if msg == '/':
+            msg=self.root_dir
+        elif msg[0] == '/':
+            msg=self.root_dir + msg
 
         # Verify path exists
         msg_path = '/'.join(path)
@@ -748,9 +838,14 @@ class ClientSupporter(threading.Thread):
 
         # Ensure depth aimed by user is correct
         _, tot_depth = self._get_depth(path)
-        if tot_depth < 0:
+        if  tot_depth < 0:
             self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
             return
+
+        if msg == '/':
+            msg=self.root_dir
+        elif msg[0] == '/':
+            msg=self.root_dir + msg
 
         # Verify path exists
         msg_path = '/'.join(path)
@@ -783,9 +878,14 @@ class ClientSupporter(threading.Thread):
 
         # Ensure depth aimed by user is correct
         _, tot_depth = self._get_depth(path)
-        if tot_depth < 0:
+        if  tot_depth < 0:
             self.cli_conn.send(self.parse_code('550 Not available, access forbidden.'))
             return
+
+        if msg == '/':
+            msg=self.root_dir
+        elif msg[0] == '/':
+            msg=self.root_dir + msg
 
         # Verify path exists
         msg_path = '/'.join(path)
