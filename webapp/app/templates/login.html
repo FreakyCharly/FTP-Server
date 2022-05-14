@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!-- This is the base for all pages -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{{ title }}</title>
+        <!-- Uso de url_for para obtener la ruta de elementos de la página -->
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='base.css') }}/>
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='login.css') }}/>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <!-- Scripts -->
+        {% block scripts %}{% endblock %}
+    </head>
+    <body>
+        <header>
+            <!-- Main Header -->
+            <h1>
+                <a class="material-icons"  href="{{ url_for('index') }}">
+                    cloud
+                </a>
+                MyCloud
+            </h1>
+        </header>
+        <section>
+            <div class="wrapper">
+                <div id="formContent">
+                  <!-- Tabs Titles -->
+                  <h2 class="active"> Sign In </h2>
+                  <h2 class="inactive underlineHover">Sign Up </h2>
+              
+                  <!-- Login Form -->
+                  <form>
+                    <input required type="text" id="login" name="login" placeholder="Introduce tu usuario...">
+                    <input required type="text" id="password" name="password" placeholder="Introduce tu contraseña...">
+                    <input type="submit" value="Log In">
+                  </form>
+              
+                  <!-- Remind Passowrd -->
+                  <div id="formFooter">
+                    <a class="underlineHover" href="#">Forgot Password?</a>
+                  </div>
+              
+                </div>
+            </div>
+        </section>
+    </body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!-- This is the base for all pages -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{% block title %} {% endblock %}</title>
+        <!-- Uso de url_for para obtener la ruta de elementos de la página -->
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='base.css') }}/>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <!-- Scripts -->
+        {% block scripts %}{% endblock %}
+    </head>
+    <body>
+        <header>
+            <!-- Main Header -->
+            <h1>
+                <a class="material-icons"  href="{{ url_for('index') }}">
+                    cloud
+                </a>
+                MyCloud
+            </h1>
+            <div class='user_info'>
+                {% if not session['usuario'] %}
+                <a class='user_btn' href="{{ url_for('login') }}"><i class="material-icons">account_circle</i> Sign In</a>
+                <a class='user_btn' href="{{ url_for('register') }}"><i class="material-icons">perm_identity</i> Register</a>
+                <span class='user_status'>User: Anonymous</span>
+                {% else %}
+                <a class='user_btn' href="{{ url_for('logout') }}"><i class="material-icons">logout</i> Log out</a>
+                <span class='user_status'>User: {{ session['usuario'] }}</span>
+                {% endif%}
+            </div>
+        </header>
+
+        <section>
+            {% block content %}{% endblock %}
+        </section>
+
+    </body>
+</html>

@@ -1,3 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 .vscode/
+env/
+webapp/app/__pycache__/
+webapp/app/api/__pycache__/

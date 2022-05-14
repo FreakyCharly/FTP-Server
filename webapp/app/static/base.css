@@ -1,0 +1,222 @@
+/*
+    MAIN STYLESHEET
+*/
+
+* {
+    box-sizing: border-box;
+ }
+
+/* Define constants for colors (more useful than hex codes) */
+:root {
+    --white0: #f1f1f1;
+    --white1: #bfbfbf;
+    --gray0: #ccc;
+    --gray1: #3e4444;
+    --grey2: rgb(38, 37, 37);
+    --yellow0: #feb236;
+    --yellow1: #E79C10;
+    --blue0: #1d9099;
+    --green0: #11a768;
+    --red0: #D53A33;
+    --black0: rgb(13, 12, 12);
+    --purple0: rgb(80, 0, 80);
+    --pink0: rgb(246, 72, 101);
+    --pink1: rgb(253, 115, 138);
+    --pink2: rgb(184, 17, 45);
+ }
+
+/* Body */
+html, body {
+    scroll-behavior: smooth;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    flex-direction: column;
+ }
+
+body{
+    background-image: linear-gradient(to bottom, var(--black0), var(--grey2));
+    overflow-y: auto;
+    overflow-x: auto;
+ }
+
+body > * {
+    flex-shrink: 0;
+}
+
+/* Header */
+header {
+    font-size: 20px;
+    width: 100%;
+    top: 0;
+    position: fixed;
+    z-index: 10;
+ }
+
+header h1 {
+    grid-area: text;
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 50px;
+    margin: 0;
+    padding: 10px;
+    color: var(--yellow1);
+    text-shadow:
+        0 0 7px var(--white0),
+        0 0 10px var(--white0),
+        0 0 21px var(--white0),
+        0 0 42px var(--white1),
+        0 0 82px var(--white1),
+        0 0 92px var(--white1),
+        0 0 102px var(--white1),
+        0 0 151px var(--white1);
+    text-align: center;
+    animation: flicker 6.5s infinite alternate;
+    /* animation: pulsate 0.11s ease-in-out infinite alternate; */
+ }
+
+ header h1 a{
+    text-decoration: none;
+    color: inherit;
+ }
+
+header .user_info *{
+    color: var(--yellow0);
+ }
+
+@keyframes flicker {
+    18%, 22%, 25%, 53%, 57% {
+      text-shadow:
+        0 0 4px var(--white0),
+        0 0 11px var(--white0),
+        0 0 19px var(--white0),
+        0 0 40px var(--white1),
+        0 0 80px var(--white1),
+        0 0 90px var(--white1),
+        0 0 100px var(--white1),
+        0 0 150px var(--white1);
+    }
+    20%, 24%, 55% {       
+      text-shadow: none;
+    }
+ }
+@keyframes pulsate {
+    100% {
+      /* Larger blur radius */
+      text-shadow:
+        0 0 4px var(--pink1),
+        0 0 11px var(--pink1),
+        0 0 19px var(--pink1),
+        0 0 40px var(--pink0),
+        0 0 80px var(--pink0),
+        0 0 90px var(--pink0),
+        0 0 100px var(--pink0),
+        0 0 150px var(--pink0);
+    }
+   0% {
+      /* A slightly smaller blur radius */
+      text-shadow:
+        0 0 4px var(--pink1),
+        0 0 10px var(--pink1),
+        0 0 18px var(--pink1),
+        0 0 38px var(--pink0),
+        0 0 73px var(--pink0),
+        0 0 80px var(--pink0),
+        0 0 94px var(--pink0),
+        0 0 140px var(--pink0);
+    }
+ }
+
+/* Content frame */
+#wrapper-frame {
+    display: flex;
+    align-items: center;
+    flex-direction: column; 
+    justify-content: center;
+    padding-top: 150px;
+    width: 100%;
+    min-height: 100%;
+    padding: 140px;
+}
+#main-frame {
+    -webkit-border-radius: 10px 10px 10px 10px;
+    border-radius: 10px 10px 10px 10px;
+    background: var(--white0);
+    position: relative;
+    -webkit-box-shadow: 0 30px 60px 0 rgba(0,0,0,0.3);
+    box-shadow: 0 30px 60px 0 rgba(0,0,0,0.3);
+    text-align: center;
+    height: 450px;
+    width: 800px;
+}
+#secondary-frame {
+    display: flex;
+    align-items: left;
+    flex-direction: column; 
+    justify-content: left;
+    overflow: auto;
+    
+    background: var(--white1);
+    position: absolute;
+    border-radius: 10px 10px 10px 10px;
+    height: 350px;
+    width: 700px;
+    top: 45%;
+    left: 50%;
+    margin: -175px 0px 0px -350px;
+}
+#upload-form{
+    position: absolute;
+    top: 128%;
+    left: 50%;
+    margin: -175px 0px 0px -350px;
+    min-width: 300px;
+    min-height: 50px;
+}
+
+/* Path */
+.path{
+    display: flex;
+    flex-direction: row;
+}
+.path #undo-icon{
+    padding: 10px 5px 0 15px;
+}
+.subpath{
+    text-align: left;
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 20px;
+    margin: 0;
+    padding-top: 17px;
+}
+
+/* List of files */
+.myTable{
+    padding: 20px;
+}
+.myTable-item{
+    background: var(--gray0);
+}
+.myTable-item-title:hover{
+    background: var(--white0);
+}
+
+
+.myTable-titles-title, .myTable-item-title{
+    text-align: left;
+}
+.myTable-titles-size, .myTable-item-size{
+    text-align: right;
+}
+.myTable-item-title-a{
+    text-decoration: none;
+    color: inherit;
+}
+
+/* File content */
+#file-content{
+    text-align: left;
+    margin: 10px;
+    overflow: auto;
+}

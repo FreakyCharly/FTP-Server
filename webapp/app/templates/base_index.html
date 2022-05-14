@@ -1,0 +1,27 @@
+<!-- This is the base for the main cloud menu -->
+{% extends "base.html" %}
+
+{% block title %}
+{% endblock%}
+
+{% block scripts %}
+{% endblock%}
+
+{% block content %}
+<div id="wrapper-frame">
+    <div id="main-frame">
+        <div id="secondary-frame">
+            <div class="path">
+                {% if path|length > 0%}
+                    <a id="undo-icon" class="material-icons"  href="{{ url_for('undo') }}">
+                        undo
+                    </a>
+                {% endif %}
+                {% for subpath in path %}
+                    <a class="subpath">{{ subpath }}</a>
+                {% endfor %}
+            </div>
+            {% block secondary_frame %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

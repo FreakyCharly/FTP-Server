@@ -1,0 +1,36 @@
+<!-- This is the base for the main cloud menu -->
+{% extends "base_index.html" %}
+
+{% block title %}
+    {{ title }}
+{% endblock%}
+
+{% block secondary_frame %}
+    <table class="myTable">
+        <tr class="myTable-titles">
+            <th class="myTable-titles-title"><b>Title</b></th>
+            <th class="myTable-titles-date"><b>Last modified date</b></th>
+            <th class="myTable-titles-size"><b>File size</b></th>
+        </tr>
+
+        {% for item in items %}
+            <tr class="myTable-item">
+                <!-- Title -->
+                <td class="myTable-item-title">
+                    <a href="{{ url_for('file', title=item.title) }}"
+                        class="myTable-item-title-a">
+                        {{ item.title }}
+                    </a>
+                </td>
+                <!-- Modified date -->
+                <td class="myTable-item-date">
+                    {{ item.date }}
+                </td>
+                <!-- File size -->
+                <td class="myTable-item-size">
+                    {{ item.size }}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+{% endblock %}

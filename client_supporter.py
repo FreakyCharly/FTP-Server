@@ -64,7 +64,7 @@ cmds_available = {
     'RNTO': True,
     'RMD': True,
     'MKD': True,
-    'CWD': True,
+    'CWD': True
 }
 cmds_3_chars_0_args = {
     'PWD': True
