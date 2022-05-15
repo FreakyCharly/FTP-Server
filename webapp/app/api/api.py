@@ -59,9 +59,16 @@ class API:
         if '.' in title:
             content = []
             try:
-                self.ftp.retrlines('RETR ' + title, lambda a: content.append(a))
+                a = self.ftp.retrbinary('RETR ' + title, lambda a: content.append(a))
             except:
-                return 'This file is binary. Can\'t see its content'
-            return 'file', ''.join(content)
+                pass
+            return 'file', content
         else:
             return 'directory', self.list_dir(dir=title)
+    
+    def store_file(self, file):
+        try:
+            self.ftp.storbinary('STOR '+file.filename, file)
+        except:
+            return 'Something went wrong. Can\'t upload file.'
+        return 'File uploaded succesfully.'

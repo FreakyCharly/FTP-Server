@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<!-- This is the base for all pages -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{% block title %} {% endblock %}</title>
+        <!-- Uso de url_for para obtener la ruta de elementos de la página -->
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='prueba.css') }}/>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <!-- Scripts -->
+    </head>
+    <body>
+        
+    </body>
+</html>

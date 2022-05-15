@@ -2,14 +2,11 @@
 # -*- coding: utf-8 -*-
 
 from app import app
-from flask import render_template, request, url_for, redirect, session, jsonify, make_response
-import json
-import os
-import hashlib
-import re
-import random
-from datetime import datetime
+from flask import render_template, request, url_for, redirect, session, send_file, send_from_directory
 from app.api.api import API
+from werkzeug.utils import secure_filename
+import os
+import tempfile
 
 cmd = API()
 curr_path = []
@@ -17,6 +14,9 @@ curr_path = []
 @app.route('/')
 @app.route('/index/', methods=['GET'])
 def index():
+    # For testing only
+    #return render_template('prueba.html')
+
     data = cmd.list_dir(root=True)
     
     while curr_path:
@@ -24,11 +24,30 @@ def index():
 
     return render_template('index.html', title="MyCloud", items=data)
 
+# This helps to include Script files into Jinja2 templates
+@app.template_global()
+def static_include(filename):
+    with open(os.path.join(app.root_path, 'static/'+filename), 'r') as f:
+        return f.read()
+
 @app.route('/files/<title>', methods=['GET', 'POST'])
 def file(title):
     type, content = cmd.get_file_content(title)
-    if type == 'file':
-        return render_template('file_content.html', title="MyCloud - See content", data=content, path=curr_path)
+    if type == 'error':
+        if not curr_path:
+            data = cmd.list_dir(root=True)
+        else:
+            data = cmd.list_dir(dir=''.join(curr_path))
+        return render_template('index.html', title="MyCloud", items=data, path=curr_path)
+    
+    # File
+    elif type == 'file':
+        with open('app/temp/'+title, "wb") as f:
+            for c in content:
+                f.write(c)
+        return send_file('temp/'+title, as_attachment=True)
+    
+    # Directory
     else:
         curr_path.append('/'+title)
         return render_template('index.html', title="MyCloud", items=content, path=curr_path)
@@ -45,6 +64,24 @@ def undo():
     except:
         data = cmd.list_dir(root=True)
     return render_template('index.html', title="MyCloud", items=data, path=curr_path)
+
+@app.route('/upload_file', methods=['POST'])
+def upload_file():
+    f = request.files['file']
+    
+    cmd.store_file(f)
+    
+    if not curr_path:
+        data = cmd.list_dir(root=True)
+    else:
+        data = cmd.list_dir(dir=''.join(curr_path))
+
+    return render_template('index.html', title="MyCloud", items=data, path=curr_path)
+
+
+
+
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

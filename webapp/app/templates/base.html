@@ -6,11 +6,19 @@
         <title>{% block title %} {% endblock %}</title>
         <!-- Uso de url_for para obtener la ruta de elementos de la página -->
         <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='base.css') }}/>
+        <link rel="stylesheet" type="text/css" href={{ url_for('static', filename='background.css') }}/>
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
         <!-- Scripts -->
         {% block scripts %}{% endblock %}
     </head>
     <body>
+        <!-- <div id="background"></div>
+        <div id="midground"></div>
+        <div id="foreground"></div> -->
+
+        <canvas id="canvas1"></canvas>
+        <script src={{ url_for('static', filename='js/particles.js') }}></script>
+
         <header>
             <!-- Main Header -->
             <h1>
@@ -35,5 +43,14 @@
             {% block content %}{% endblock %}
         </section>
 
+        <!-- <div class="wrapper-background-effect">
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+            <span class="background-effect"></span>
+        </div> -->
     </body>
 </html>

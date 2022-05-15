@@ -5,6 +5,15 @@
     {{ title }}
 {% endblock%}
 
+
+{% block main_frame %}
+    <form id="upload-form" action="{{ url_for('upload_file') }}" 
+            enctype = "multipart/form-data" method="POST">
+        <input type="file" name="file">
+        <input type="submit">
+    </form>
+{% endblock %}
+
 {% block secondary_frame %}
     <table class="myTable">
         <tr class="myTable-titles">
@@ -16,11 +25,19 @@
         {% for item in items %}
             <tr class="myTable-item">
                 <!-- Title -->
+                {% if '.' in item.title %}
                 <td class="myTable-item-title">
-                    <a href="{{ url_for('file', title=item.title) }}"
-                        class="myTable-item-title-a">
+                    <a href="{{ url_for('file', title=item.title) }}" 
+                        class="myTable-item-title-a" download>
                         {{ item.title }}
                     </a>
+                {% else %}
+                <td class="myTable-item-title-hover">
+                    <a href="{{ url_for('file', title=item.title) }}" 
+                        class="myTable-item-title-hover-a">
+                        {{ item.title }}
+                    </a>
+                {% endif %}
                 </td>
                 <!-- Modified date -->
                 <td class="myTable-item-date">

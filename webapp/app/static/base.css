@@ -42,10 +42,6 @@ body{
     overflow-x: auto;
  }
 
-body > * {
-    flex-shrink: 0;
-}
-
 /* Header */
 header {
     font-size: 20px;
@@ -198,18 +194,18 @@ header .user_info *{
 .myTable-item{
     background: var(--gray0);
 }
-.myTable-item-title:hover{
+.myTable-item-title-hover:hover{
     background: var(--white0);
 }
 
 
-.myTable-titles-title, .myTable-item-title{
+.myTable-titles-title, .myTable-item-title, .myTable-item-title-hover{
     text-align: left;
 }
 .myTable-titles-size, .myTable-item-size{
     text-align: right;
 }
-.myTable-item-title-a{
+.myTable-item-title-a, .myTable-item-title-hover-a{
     text-decoration: none;
     color: inherit;
 }
