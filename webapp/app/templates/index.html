@@ -6,15 +6,11 @@
 {% endblock%}
 
 
-{% block main_frame %}
-    <form id="upload-form" action="{{ url_for('upload_file') }}" 
-            enctype = "multipart/form-data" method="POST">
-        <input type="file" name="file">
-        <input type="submit">
-    </form>
-{% endblock %}
+{% block stylesheets %}
+    {{ dropzone.load_css() }}
+{% endblock%}
 
-{% block secondary_frame %}
+{% block content_frame %}
     <table class="myTable">
         <tr class="myTable-titles">
             <th class="myTable-titles-title"><b>Title</b></th>
@@ -50,4 +46,13 @@
             </tr>
         {% endfor %}
     </table>
+{% endblock %}
+
+
+{% block upload_frame %}
+    {{ dropzone.create(action='upload_file') }}
+    <button id="upload">Upload</button>
+    {{ dropzone.load_js() }}
+    {{ dropzone.config(custom_init='dz = this;document.getElementById("upload").addEventListener("click", function handler(e) {dz.processQueue();});',
+                        custom_options='autoProcessQueue: false, addRemoveLinks: true, parallelUploads: 20,') }}
 {% endblock %}

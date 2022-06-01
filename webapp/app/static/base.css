@@ -42,13 +42,17 @@ body{
     overflow-x: auto;
  }
 
+#frame{
+    display: flex;
+    flex-direction: column;
+}
+
 /* Header */
 header {
     font-size: 20px;
     width: 100%;
     top: 0;
-    position: fixed;
-    z-index: 10;
+    position: absolute;
  }
 
 header h1 {
@@ -128,47 +132,53 @@ header .user_info *{
 #wrapper-frame {
     display: flex;
     align-items: center;
-    flex-direction: column; 
+    flex-direction: row; 
     justify-content: center;
-    padding-top: 150px;
-    width: 100%;
-    min-height: 100%;
-    padding: 140px;
 }
-#main-frame {
+#content-frame {
+    background: var(--white1);
+    position: relative;
     -webkit-border-radius: 10px 10px 10px 10px;
     border-radius: 10px 10px 10px 10px;
-    background: var(--white0);
-    position: relative;
     -webkit-box-shadow: 0 30px 60px 0 rgba(0,0,0,0.3);
     box-shadow: 0 30px 60px 0 rgba(0,0,0,0.3);
     text-align: center;
-    height: 450px;
-    width: 800px;
-}
-#secondary-frame {
-    display: flex;
     align-items: left;
-    flex-direction: column; 
     justify-content: left;
     overflow: auto;
-    
-    background: var(--white1);
-    position: absolute;
-    border-radius: 10px 10px 10px 10px;
-    height: 350px;
-    width: 700px;
-    top: 45%;
-    left: 50%;
-    margin: -175px 0px 0px -350px;
+    height: 460px;
+    width: 750px;
+    display: flex;
+    flex-direction: column;
+    margin-left: 20px;
 }
-#upload-form{
-    position: absolute;
-    top: 128%;
-    left: 50%;
-    margin: -175px 0px 0px -350px;
-    min-width: 300px;
-    min-height: 50px;
+#upload-frame{
+    display: flex;
+    flex-direction: column;
+    margin-left: 20px;
+    margin-right: 20px;
+    
+    -webkit-border-radius: 10px 10px 10px 10px;
+    border-radius: 10px 10px 10px 10px;
+    position: relative;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+}
+.dropzone{
+    position: relative;
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    border-radius: 10px 10px 10px 10px;
+}
+#upload{
+    border-radius: 10px 10px 10px 10px;
+    position: relative;
+    width: 100px;
+    height: 50px;
+    margin-top: 10px;
 }
 
 /* Path */

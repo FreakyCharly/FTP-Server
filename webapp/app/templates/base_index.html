@@ -7,23 +7,26 @@
 {% block scripts %}
 {% endblock%}
 
+{% block stylesheets %}
+{% endblock%}
+
 {% block content %}
 <div id="wrapper-frame">
-    <div id="main-frame">
-        <div id="secondary-frame">
-            <div class="path">
-                {% if path|length > 0%}
-                    <a id="undo-icon" class="material-icons"  href="{{ url_for('undo') }}">
-                        undo
-                    </a>
-                {% endif %}
-                {% for subpath in path %}
-                    <a class="subpath">{{ subpath }}</a>
-                {% endfor %}
-            </div>
-            {% block secondary_frame %}{% endblock %}
+    <div id="content-frame">
+        <div class="path">
+            {% if path|length > 0%}
+                <a id="undo-icon" class="material-icons"  href="{{ url_for('undo') }}">
+                    undo
+                </a>
+            {% endif %}
+            {% for subpath in path %}
+                <a class="subpath">{{ subpath }}</a>
+            {% endfor %}
         </div>
-        {% block main_frame %}{% endblock %}
+        {% block content_frame %}{% endblock %}
+    </div>
+    <div id="upload-frame">
+        {% block upload_frame %}{% endblock %}
     </div>
 </div>
 {% endblock %}

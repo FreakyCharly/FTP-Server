@@ -5,6 +5,7 @@ from app import app
 from flask import render_template, request, url_for, redirect, session, send_file, send_from_directory
 from app.api.api import API
 from werkzeug.utils import secure_filename
+from flask_dropzone import Dropzone
 import os
 import tempfile
 
@@ -65,20 +66,26 @@ def undo():
         data = cmd.list_dir(root=True)
     return render_template('index.html', title="MyCloud", items=data, path=curr_path)
 
+
+app.config.update(
+    DROPZONE_UPLOAD_ON_CLICK=True,
+    DROPZONE_REDIRECT_VIEW="index",
+    DROPZONE_INPUT_NAME="file",
+    DROPZONE_DEFAULT_MESSAGE="Either drag or click to upload files"
+
+)
+dropzone = Dropzone(app)
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
-    f = request.files['file']
-    
-    cmd.store_file(f)
+    for key, f in request.files.items():
+        if key.startswith('file'):
+            cmd.store_file(f)
     
     if not curr_path:
         data = cmd.list_dir(root=True)
     else:
         data = cmd.list_dir(dir=''.join(curr_path))
-
     return render_template('index.html', title="MyCloud", items=data, path=curr_path)
-
-
 
 
 
